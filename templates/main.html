@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>CPA Booking System</title>
+        <link type ='text/css' href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet"/>
+        <script type="module" src="{{ url_for('static', path='/firebase-login.js')}}"></script>
+    </head>
+    <body>
+        
+        <div id="login-box" hidden = "true">
+            <label>Email:</label>
+            <input type="email" name="email" id="email"/>
+            <label>Password:</label>
+            <input type="password" name="password" id="password"/>
+            <div>
+            <button id="login">Login</button>
+            <button id="sign-up">Sign Up</button>
+            </div>
+        </div>
+        <button id="sign-out" hidden="true">Sign Out</button>
+
+        <!-- if we have a logged in user show the user email address from the user
+         -token object that was passed in , we will aslso show the user the documner that has a name and age-->
+         {% if user_token %}
+         <div class="page-content">
+            {% if error_message %}
+                <p style="color:red">{{ error_message }}</p>
+            {% endif %}
+
+            
+            <h2>Filter by Day</h2>
+            <form method="post" action="/filter-by-day">
+                <input type="date" name="date">
+                <button type="submit">Filter</button>   
+            </form>
+            {% if filtered_date %}
+                <h3>Filtered Results for {{ filtered_date }}</h3>
+            {% endif %}
+
+            <h2>Add Room</h2>
+            <form action="/add-room" method="post">
+                <input type="text" name="room_name" required>
+                <button type="submit">Add Room</button>
+            </form> 
+    
+            
+            <h2>Rooms Booking</h2>
+            {% if rooms|length == 0 %}
+                <p>No rooms available</p>
+            {% endif %}
+            {% for room in rooms %}
+            <div class="room-card">
+                <a href="/room/{{ room._id }}">{{ room.name }}</a>
+
+                <!--book room-->
+                <form action="/book-room" method="post">
+                    <input type="hidden" name="room_id" value="{{room._id}}">
+                    <input type="date" name="date" required>
+                    <input type="time" name="start_time" min="09:00" max="18:00" required>
+                    <input type="time" name="end_time" min="09:00" max="18:00" required>
+                    <button type="submit">Book Room</button>
+                </form>
+
+                <!--delete room-->
+                {% if room.owner_id == user_token.user_id %}
+                <form method="post" action="/delete-room">
+                    <input type="hidden" name="room_id" value="{{ room._id }}">
+                    <button type="submit">Delete Room</button>
+                </form>
+                {% endif %}
+                <!--booking for rooms-->
+                <div>
+                    <em> Your Bookings for this room:</em>
+
+                    {% set found = false %}
+                    {% for booking in bookings %}
+                        {% set day = day_map.get(booking.day_id|string) %}
+                        {% if day %}
+                        {% if day.room_id|string == room._id|string %}
+                            {% set found = true %}
+                            
+                                <div class="booking-item">
+                                    {{ day.date }} : {{ booking.start_time }} - {{ booking.end_time }}
+
+                                    <!--edit button-->
+                                     {% if booking.user_id == user_token.user_id %}
+                                    <form method="get" action="/edit-booking/{{ booking._id }}">
+                                        <button type="submit">Edit</button>
+                                    </form>
+
+                                    <!--delete button-->
+                                    <form method="post" action="/delete-booking">
+                                        <input type="hidden" name="booking_id" value="{{ booking._id }}">
+                                        <button type="submit">Delete</button>
+                                    </form>
+                                    {% endif %}
+                                </div>    
+                            {% endif %}
+                        {% endif %}    
+                        {% endfor %}
+                    {% if not found %}
+                        <p>No bookings for this room</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <hr>
+            {% endfor %}
+            <!--bookingss made-->
+            <h2>Bookings</h2>
+
+                {% if bookings|length == 0 %}
+                    <p>No bookings yet</p>
+                {% else %}
+                    {% for booking in bookings %}
+                        {% set day = day_map.get(booking.day_id|string) %}
+                        {% if day %}
+                        {% set room_name = room_map[day.room_id|string] %}
+
+                        <div class="booking-item"> 
+                            {{ room_name }} | 
+                            {{ day.date }} | {{ booking.start_time }} - {{ booking.end_time }}
+                            
+                            {% if booking.user_id == user_token.user_id %}
+                            <strong>(Your Booking)</strong>
+                            <form method="get" action="/edit-booking/{{ booking._id }}">
+                                <button>Edit</button>
+                            </form>
+                                    
+                            
+                            <form method="post" action="/delete-booking">
+                                <input type="hidden" name="booking_id" value="{{ booking._id }}">
+                                <button>Delete</button>
+                            </form>
+                            {% endif %}
+                            </div>
+                        {% endif %}    
+                    {% endfor %}                        
+                {% endif %}       
+                       
+            {% if this_room_id %}
+            <h2>Room Details</h2>
+                            
+            <h2>Room Occupancy (Next 5 Days)</h2>
+
+            {% for i in occupancy %}
+                <div class="occupancy-row">
+                    <strong>{{ i.date }}</strong> → 
+                    {% if i.occupancy > 80 %}
+                        <span class="high">{{ i.occupancy }}%</span>
+                    {% elif i.occupancy > 50 %}
+                        <span class="medium">{{ i.occupancy }}%</span>
+                    {% else %}
+                        <span class="low">{{ i.occupancy }}%</span>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            <h2>Earliest Available Slot (Next 5 Days)</h2>
+            {% for slot in free_slot %}
+                <div class="slot-row">
+                    {{ slot.date }} :
+                    {% if slot.earliest == "No availability" %}
+                        <span style="color:red;">Fully booked</span>
+                    {% else %}
+                        {{ slot.earliest }}
+                    {% endif %}
+                </div>
+            {% endfor %}
+            <h2>Calendar View (Next 5 Days)</h2>
+
+            <div class="calendar-grid">
+                <div class="calendar-time-column">
+                    <div class="calendar-header">Time</div>
+                    {% for hour in range(9, 18) %}
+                        <div class="calendar-time-slot">
+                            {{ "%02d"|format(hour) }}:00
+                        </div>
+                    {% endfor %}
+                </div>
+
+                {% for index in calendar %}
+                <div class="calendar-column">
+                    <div class="calendar-header">{{ index.date }}</div>
+                    {% for hour in range(9, 18) %}
+                        {% set hour_str = "%02d:00"|format(hour) %}
+                        {% set booked = false %}
+                        {% for booking in index.bookings %}
+                            {% if booking[:5] <= hour_str and booking[8:] > hour_str %}
+                                {% set booked = true %}
+                            {% endif %}
+                        {% endfor %}
+                        <div class="calendar-time-slot {{ 'booked' if booked else 'free' }}">
+                            {{ "Booked" if booked else "" }}
+                        </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}    
+            </div>
+            {% endif %}        
+        {% endif %}   
+                
+    </body>
+</html>
