@@ -1,0 +1,27 @@
+<h2>Search</h2>
+
+<form method="get" action="{% if type == 'users' %}/search-users{% else %}/search-tweets{% endif %}">
+    <input type="text" name="query" value="{{query}}">
+    <button type="submit">Search</button>
+</form>
+
+<hr>
+
+{% if type == "users" %}
+    <h3>User Results</h3>
+    {% for user in users %}
+        <div>
+            <a href="/profile/{{user.username}}">{{user.username}}</a>
+        </div>
+    {% endfor %}
+{% endif %}
+
+{% if type == "tweets" %}
+    <h3>Tweet Results</h3>
+    {% for tweet in tweets %}
+        <div>
+            <b>{{tweet.username}}</b><br>
+            {{tweet.content}}
+        </div>
+    {% endfor %}
+{% endif %}

@@ -23,6 +23,7 @@
          -token object that was passed in , we will aslso show the user the documner that has a name and age-->
         {% if user_token %}
         <div>
+            
             {% if error_message %}
                 <p style="color:red">{{ error_message }}</p>
             {% endif %}
@@ -39,8 +40,13 @@
             <!--Main page-->
             {% if user_info %}
                 <h2>Welcome!! {{ user_info.username}}</h2>
+
+                <a href="/profile/{{user_info.username}}">My Profile</a>
             {% endif %}
             
+            <a href="/search-users">Search Users</a>
+            <a href="/search-tweets">Search Tweets</a>
+
             <form action="/add-tweet" method="post">
                 <input type="text" name="tweet_text" maxlength="280" required>
                 <button type="submit">Tweet</button>

@@ -7,7 +7,7 @@ from google.auth.transport import requests
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 import starlette.status as status
-import datetime
+from datetime import datetime, timedelta
 from bson import ObjectId
 from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPermissions, PublicAccess
 
@@ -38,30 +38,34 @@ tweets_collection = db["tweets"]
 
 #we need a request object to be able to talk to firebase for verifying user logins
 firebase_request_adapter = requests.Request()
-"""azure_connection_string = (
+azure_connection_string = (
     "DefaultEndpointsProtocol=http;"
     "AccountName=devstoreaccount1;"
     "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;"
-    "BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+    "BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
 )
 azure_service_client = BlobServiceClient.from_connection_string(azure_connection_string)
-azure_container_name = "twitter-container"
-azure_service_client = azure_service_client.get_container_client(azure_container_name)
+azure_container_name = "profile-pictures-container"
+
+
 
 azure_container_client = azure_service_client.get_container_client(azure_container_name)
 try:
-    azure_service_client.create_container()
+    azure_container_client.create_container()
 except Exception:
     print('container exists')
 
-container_service_client = azure_service_client.get_container_client(azure_container_name)
-existing_policies = container_service_client.get_container_access_policy()
-access_policy = AccessPolicy(permission=ContainerSasPermissions(read=True), expiry=datetime.now() + timedelta(hours=24), start=datetime.now()- timedelta(minutes=1))
-identidiers = {'read': access_policy}
-existing_policies['public_access']= 'blob'
 
-azure_container_client.set_container_access_policy(signed_identifiers=identidiers, public_access=PublicAccess.CONTAINER)
-"""
+container_service_client=azure_service_client.get_container_client(azure_container_name)
+existing_policies = container_service_client.get_container_access_policy()
+access_policy = AccessPolicy(permission=ContainerSasPermissions(read=True),expiry=datetime.now() + timedelta(hours=24),start=datetime.now() - timedelta(minutes=5))
+identifiers = {'read': access_policy}
+
+azure_container_client.set_container_access_policy(signed_identifiers=identifiers,public_access=PublicAccess.CONTAINER)
+
+
+
+
 #define the static and directories
 app.mount('/static', StaticFiles(directory='static'), name='static')
 templates = Jinja2Templates(directory='templates')
@@ -87,13 +91,13 @@ def validateFirebaseToken(id_token):
 
 
 
-"""
+
 def listBlobs():
     blob_names = []
     for blob in azure_container_client.list_blobs():
         blob_names.append(blob.name)
 
-    return blob_names  """ 
+    return blob_names   
 
 #user get function
 def getUser(user_token):
@@ -114,14 +118,7 @@ async def root(request: Request):
     id_token = request.cookies.get('token')
     user_token = None
 
-    ##azurite
-    """blob_names=listBlobs()
-    #azurite urls
-    urls = []
-    for blob in blob_names:
-        blob_client = azure_container_client.get_blob_client(blob=blob)
-        urls.append(blob_client.url)
-    """    
+    
     
 
     #check if we have a valid firebase login if not return the template with empty dara as we will show the login boc
@@ -161,8 +158,6 @@ async def root(request: Request):
         })
  
 
-    
-
 #method for unew username
 @app.post("/new-username", response_class=HTMLResponse)
 async def newUsername(request: Request):
@@ -191,8 +186,11 @@ async def newUsername(request: Request):
     
     users_collection.insert_one({
         "user_id": user_token["user_id"],
-        "username": username
-        
+        "username": username,
+        "bio": "",
+        "profile_picture": "",
+        "following": [],
+        "followers": []
     })
 
     return RedirectResponse("/", status_code=status.HTTP_302_FOUND)
@@ -225,4 +223,186 @@ async def addTweet(request: Request):
     
 
     return RedirectResponse("/", status_code=status.HTTP_302_FOUND)
+
+
+#method to add a new room to the database
+@app.get('/search-users', response_class=HTMLResponse)
+async def searchUsers(request: Request, query: str =""):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    
+    users = []
+
+    if query:
+        users = list(users_collection.find({
+            "username": {"$regex": "^" + query}
+        }))
+     
+    
+
+    return templates.TemplateResponse("search.html", {
+        "request": request,
+        "users": users,
+        "tweets": [],
+        "query": query,
+        "type": "users"
+    })
+
+@app.get('/search-tweets', response_class=HTMLResponse)
+async def searchTweets(request: Request, query: str =""):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    
+    tweets = []
+
+    if query:
+        tweets = list(tweets_collection.find({
+            "content": {"$regex": "^" + query}
+        }))
+     
+    
+
+    return templates.TemplateResponse("search.html", {
+        "request": request,
+        "users": [],
+        "tweets": tweets,
+        "query": query,
+        "type": "tweets"
+    })
+
+
+#profile route
+@app.get('/profile/{username}', response_class=HTMLResponse)
+async def profile(request: Request, username: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    
+    current_userId = user_token["user_id"]
+
+    current_user = users_collection.find_one({"user_id": current_userId})
+    user = users_collection.find_one({"username": username})
+
+    if not user:
+        return RedirectResponse("/", status_code=status.HTTP_302_FOUND)     
+    
+    tweets = list(
+        tweets_collection.find({"username": username})
+        .sort("created_at", -1)
+        .limit(10)
+    )
+
+    is_Following = user["user_id"] in current_user.get("following", [])
+
+    
+
+    return templates.TemplateResponse("profile.html", {
+        "request": request,
+        "profile_user": user,
+        "is_owner": current_userId == user["user_id"],
+        "tweets": tweets,
+        "is_following": is_Following
+    })
+
+@app.post('/follow-user/{username}')
+async def followUser(request: Request, username: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    
+    current_userId = user_token["user_id"] 
+
+    followed_user = users_collection.find_one({"username": username})
+
+    if followed_user:
+        users_collection.update_one(
+            {"user_id": current_userId},
+            {"$addToSet": {"following": followed_user["user_id"]}}
+        )
+        users_collection.update_one(
+            {"username": username},
+            {"$addToSet": {"followers": current_userId}}
+        )
+    
+    return RedirectResponse(f"/profile/{username}", status_code=status.HTTP_302_FOUND)
+
+@app.post('/unfollow-user/{username}')
+async def unfollowUser(request: Request, username: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    
+    current_userId = user_token["user_id"] 
+
+    followed_user = users_collection.find_one({"username": username})
+
+    if followed_user:
+        users_collection.update_one(
+            {"user_id": current_userId},
+            {"$pull": {"following": followed_user["user_id"]}}
+        )
+        users_collection.update_one(
+            {"username": username},
+            {"$pull": {"followers": current_userId}}
+        )
+    
+    return RedirectResponse(f"/profile/{username}", status_code=status.HTTP_302_FOUND)
+
+
+@app.post('/upload-profile-picture')
+async def uploadProfilePicture(request: Request):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    
+    form = await request.form()
+    file = form["file"]
+
+    #format validation
+    if file.content_type not in ["image/jpeg", "image/png"]:
+        return RedirectResponse("/", status_code=status.HTTP_302_FOUND)
+
+    current_userId = user_token["user_id"]
+
+    filename = current_userId + "_" + file.filename
+
+    blob_client = azure_container_client.get_blob_client(filename)
+    blob_client.upload_blob(await file.read(), overwrite=True)
+
+    file_url = blob_client.url
+
+    users_collection.update_one(
+            {"user_id": current_userId},
+            {"$set": {"profile_picture": file_url}}
+    )
+
+    user = users_collection.find_one({"user_id": current_userId})
+       
+
+    if file.content_type not in ["image/jpeg", "image/png"]:
+        return templates.TemplateResponse("profile.html", {
+            "request": request,
+            "profile_user": user,
+            "tweets": [],
+            "is_following": False,
+            "error_message": "Only JPG/PNG allowed"
+        })
+    
+    return RedirectResponse(f"/profile/{user['username']}", status_code=status.HTTP_302_FOUND)
+
+
 
