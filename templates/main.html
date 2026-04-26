@@ -23,18 +23,21 @@
          -token object that was passed in , we will aslso show the user the documner that has a name and age-->
         {% if user_token %}
         <div>
-            
-            {% if error_message %}
-                <p style="color:red">{{ error_message }}</p>
-            {% endif %}
+        {% if error_message and not need_username %}
+            <p style="color:red">{{ error_message }}</p>
+        {% endif %}
 
             <!-- set username-->
             {% if need_username %}
-            <h2>Set Username</h2>
-            <form method="post" action="/new-username">
-                <input type="text" name="username">
-                <button type="submit">Save</button>   
-            </form>
+                <h2>Set Username</h2>
+                {% if error_message %}
+                    <p style="color:red">{{ error_message }}</p>
+                {% endif %}
+                <form method="post" action="/new-username">
+                    <input type="text" name="username">
+                    <button type="submit">Save</button>   
+                </form>
+                
             {% endif %}
 
             <!--Main page-->
@@ -48,14 +51,13 @@
             <a href="/search-tweets">Search Tweets</a>
 
             <form action="/add-tweet" method="post">
-                <input type="text" name="tweet_text" maxlength="280" required>
+                <textarea name="tweet_text" maxlength="280" required>
                 <button type="submit">Tweet</button>
             </form> 
                 
         
             
             <h2>Timeline</h2>
-
                 {% for tweet in tweets %}
                 <div>
                     <b>
@@ -69,7 +71,7 @@
                 
                     {% if edit_id == tweet._id|string %}
                         <form method="post" action="/edit-tweet/{{tweet._id}}">
-                            <input type="text" name="tweet_text" value="{{tweet.content}}" maxlength="280">
+                            <textarea type="text" name="tweet_text" value="{{tweet.content}}" maxlength="280">
                             <button type="submit">Save</button>
                             <a href="/">Cancel</a>
                         </form>

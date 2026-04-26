@@ -142,11 +142,11 @@ async def root(request: Request, edit_id: str = None):
         "user_token": user_token,
         "need_username": True,
         "tweets": [],
-        "error": "" 
+        "error_message": "" 
     })
     
     #timeline implementation
-    following_ids = user.get("following", [])
+    following_ids = user.get("following", []).copy()
     following_ids.append(user_token["user_id"])#include user tweets
 
     tweets = list(
@@ -219,10 +219,27 @@ async def addTweet(request: Request):
     form = await request.form()
     tweet_text = form['tweet_text']
 
-    if len(tweet_text) >280:
-        return RedirectResponse("/", status_code=302)
-    
     user_info = getUser(user_token)
+
+    if len(tweet_text) >280:
+        following_ids = user_info.get("following", []).copy()
+        following_ids.append(user_token["user_id"])
+
+        tweets = list(tweets_collection.find(
+            {"user_id": {"$in": following_ids}}
+        ).sort("created_at", -1).limit(20))
+
+        return templates.TemplateResponse("main.html", {
+            "request": request,
+            "user_token": user_token,
+            "user_info": user_info,
+            "need_username": False,
+            "tweets": tweets,
+            "edit_id": None,
+            "error_message": "Tweet must be 280 characters or less."
+        })
+    
+    
 
     tweets_collection.insert_one({
         "user_id" : user_token["user_id"],
@@ -256,6 +273,7 @@ async def searchUsers(request: Request, query: str =""):
 
     return templates.TemplateResponse("search.html", {
         "request": request,
+        "user_token": user_token, 
         "users": users,
         "tweets": [],
         "query": query,
@@ -281,6 +299,7 @@ async def searchTweets(request: Request, query: str =""):
 
     return templates.TemplateResponse("search.html", {
         "request": request,
+        "user_token": user_token, 
         "users": [],
         "tweets": tweets,
         "query": query,
@@ -317,6 +336,7 @@ async def profile(request: Request, username: str, edit_id: str = None):
 
     return templates.TemplateResponse("profile.html", {
         "request": request,
+        "user_token": user_token,
         "profile_user": user,
         "is_owner": current_userId == user["user_id"],
         "tweets": tweets,
@@ -335,6 +355,10 @@ async def followUser(request: Request, username: str):
     current_userId = user_token["user_id"] 
 
     followed_user = users_collection.find_one({"username": username})
+
+    if followed_user and followed_user["user_id"] == current_userId:
+        return RedirectResponse(f"/profile/{username}", status_code=status.HTTP_302_FOUND)
+
 
     if followed_user:
         users_collection.update_one(
@@ -384,11 +408,17 @@ async def uploadProfilePicture(request: Request):
     form = await request.form()
     file = form["file"]
 
+    current_userId = user_token["user_id"]
+    user = users_collection.find_one({"user_id": current_userId})
+    
+    if not file or not file.filename:
+        return RedirectResponse("/", status_code=302)
+    
     #format validation
     if file.content_type not in ["image/jpeg", "image/png"]:
-        return RedirectResponse("/", status_code=status.HTTP_302_FOUND)
+        return RedirectResponse(f"/profile/{user['username']}", status_code=status.HTTP_302_FOUND)
 
-    current_userId = user_token["user_id"]
+   
 
     filename = current_userId + "_" + file.filename
 
@@ -402,50 +432,11 @@ async def uploadProfilePicture(request: Request):
             {"$set": {"profile_picture": file_url}}
     )
 
-    user = users_collection.find_one({"user_id": current_userId})
-       
-
-    if file.content_type not in ["image/jpeg", "image/png"]:
-        return templates.TemplateResponse("profile.html", {
-            "request": request,
-            "profile_user": user,
-            "tweets": [],
-            "is_following": False,
-            "error_message": "Only JPG/PNG allowed"
-        })
     
+       
     return RedirectResponse(f"/profile/{user['username']}", status_code=status.HTTP_302_FOUND)
 
 
-@app.get('/timeline', response_class=HTMLResponse)
-async def timeline(request: Request):
-    id_token = request.cookies.get('token')
-    user_token = validateFirebaseToken(id_token)
-
-    if not user_token:
-        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
-    
-    current_userId = user_token["user_id"]
-
-    user = users_collection.find_one({"user_id": current_userId})
-
-    following = user.get("following", [])
-
-    # include my tweets
-    following.append(current_userId)
-
-    user_ids = [user_token["user_id"]] + user.get("following", [])
-
-    tweets = list(
-        tweets_collection.find({"user_id": {"$in": user_ids}})
-        .sort("created_at", -1)
-        .limit(20)
-    )
-
-    return templates.TemplateResponse("search.html", {
-        "request": request,
-        "tweets": tweets,
-    })
 
 @app.post('/edit-tweet/{tweet_id}')
 async def editTweet(request: Request, tweet_id: str):
@@ -457,9 +448,15 @@ async def editTweet(request: Request, tweet_id: str):
 
     form = await request.form()
     new_text = form['tweet_text']
+    source   = form.get('source', 'home')
+    username = form.get('username', '')
 
     if len(new_text) > 280:
-        return RedirectResponse("/", status_code=302)
+        if source == 'profile' and username:
+            return RedirectResponse(
+                f"/profile/{username}?edit_id={tweet_id}", status_code=302)
+        return RedirectResponse(f"/?edit_id={tweet_id}", status_code=302)
+
 
     tweets_collection.update_one(
         {
@@ -471,9 +468,34 @@ async def editTweet(request: Request, tweet_id: str):
         }
     )
 
+    if source == 'profile' and username:
+        return RedirectResponse(f"/profile/{username}", status_code=302)
     return RedirectResponse("/", status_code=302)
 
 
+@app.post('/update-bio')
+async def updateBio(request: Request):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=302)
+
+
+    form = await request.form()
+    bio = form["bio"]
+
+    user = users_collection.find_one({"user_id": user_token["user_id"]})
+
+    if len(bio) > 280:
+        return RedirectResponse(f"/profile/{user['username']}", status_code=302)
+
+    users_collection.update_one(
+        {"user_id": user_token["user_id"]},
+        {"$set" : {"bio": bio}}
+        )
+
+    return RedirectResponse(f"/profile/{user['username']}", status_code=302)
 
 
 

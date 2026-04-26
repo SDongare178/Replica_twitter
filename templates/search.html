@@ -1,4 +1,18 @@
+<head>
+    <script type="module" src="{{ url_for('static', path='/firebase-login.js')}}"></script>
+</head>
+<body>
+    <div id="login-box" hidden="true">
+        <input type="email" id="email"/>
+        <input type="password" id="password"/>
+        <button id="login">Login</button>
+        <button id="sign-up">Sign Up</button>
+    </div>
+    <button id="sign-out" hidden="true">Sign Out</button>
+
+
 <h2>Search</h2>
+<a href="/">Back to Timeline</a>
 
 <form method="get" action="{% if type == 'users' %}/search-users{% else %}/search-tweets{% endif %}">
     <input type="text" name="query" value="{{query}}">
@@ -25,3 +39,4 @@
         </div>
     {% endfor %}
 {% endif %}
+</body>
