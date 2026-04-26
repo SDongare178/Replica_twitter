@@ -111,7 +111,7 @@ def getUser(user_token):
 
 #root of the application that will be responsible for login and logout and display the details of the user 
 @app.get("/", response_class=HTMLResponse)
-async def root(request: Request):
+async def root(request: Request, edit_id: str = None):
     #query firebase for the requesr token we will also decide a bunch if other variables here as we will need them 
     # for rendering the template at the end We have an error_messafe there is case you want to output an error to 
     # the user in the template
@@ -145,7 +145,17 @@ async def root(request: Request):
         "error": "" 
     })
     
-    tweets = list(tweets_collection.find({"user_id": user_token["user_id"]}).sort("created_at", -1))
+    #timeline implementation
+    following_ids = user.get("following", [])
+    following_ids.append(user_token["user_id"])#include user tweets
+
+    tweets = list(
+        tweets_collection.find({
+            "user_id": {"$in": following_ids}
+        })
+        .sort("created_at", -1)
+        .limit(20)
+    )
 
     
     return templates.TemplateResponse("main.html", {
@@ -154,6 +164,7 @@ async def root(request: Request):
         "user_info": user,
         'need_username': False,
         "tweets": tweets,
+        "edit_id": edit_id,
         "error_message": ""    
         })
  
@@ -217,7 +228,7 @@ async def addTweet(request: Request):
         "user_id" : user_token["user_id"],
         "username": user_info["username"],
         "content": tweet_text,
-        "created_at": datetime.datetime.now()
+        "created_at": datetime.now()
     })
         
     
@@ -279,7 +290,7 @@ async def searchTweets(request: Request, query: str =""):
 
 #profile route
 @app.get('/profile/{username}', response_class=HTMLResponse)
-async def profile(request: Request, username: str):
+async def profile(request: Request, username: str, edit_id: str = None):
     id_token = request.cookies.get('token')
     user_token = validateFirebaseToken(id_token)
 
@@ -309,7 +320,8 @@ async def profile(request: Request, username: str):
         "profile_user": user,
         "is_owner": current_userId == user["user_id"],
         "tweets": tweets,
-        "is_following": is_Following
+        "is_following": is_Following,
+        "edit_id": edit_id
     })
 
 @app.post('/follow-user/{username}')
@@ -403,6 +415,65 @@ async def uploadProfilePicture(request: Request):
         })
     
     return RedirectResponse(f"/profile/{user['username']}", status_code=status.HTTP_302_FOUND)
+
+
+@app.get('/timeline', response_class=HTMLResponse)
+async def timeline(request: Request):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=status.HTTP_302_FOUND)
+    
+    current_userId = user_token["user_id"]
+
+    user = users_collection.find_one({"user_id": current_userId})
+
+    following = user.get("following", [])
+
+    # include my tweets
+    following.append(current_userId)
+
+    user_ids = [user_token["user_id"]] + user.get("following", [])
+
+    tweets = list(
+        tweets_collection.find({"user_id": {"$in": user_ids}})
+        .sort("created_at", -1)
+        .limit(20)
+    )
+
+    return templates.TemplateResponse("search.html", {
+        "request": request,
+        "tweets": tweets,
+    })
+
+@app.post('/edit-tweet/{tweet_id}')
+async def editTweet(request: Request, tweet_id: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=302)
+
+    form = await request.form()
+    new_text = form['tweet_text']
+
+    if len(new_text) > 280:
+        return RedirectResponse("/", status_code=302)
+
+    tweets_collection.update_one(
+        {
+            "_id": ObjectId(tweet_id),
+            "user_id": user_token["user_id"]
+        },
+        {
+            "$set": {"content": new_text}
+        }
+    )
+
+    return RedirectResponse("/", status_code=302)
+
+
 
 
 

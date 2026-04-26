@@ -52,16 +52,34 @@
                 <button type="submit">Tweet</button>
             </form> 
                 
-            <h2>My Tweets</h2>
+        
             
-            {% for tweet in tweets %}
-            <div>
-                <b>{{ tweet.username }}</b><br>
-                {{tweet.content}}<br>
-                <small>{{tweet.created_at}}</small>    
-            </div>
-            {%endfor%}
-            
+            <h2>Timeline</h2>
+
+                {% for tweet in tweets %}
+                <div>
+                    <b>
+                        <a href="/profile/{{tweet.username}}">
+                            {{ tweet.username }}
+                        </a>
+                    </b><br>
+
+                    {{ tweet.content }}<br>
+                    <small>{{ tweet.created_at }}</small>
+                
+                    {% if edit_id == tweet._id|string %}
+                        <form method="post" action="/edit-tweet/{{tweet._id}}">
+                            <input type="text" name="tweet_text" value="{{tweet.content}}" maxlength="280">
+                            <button type="submit">Save</button>
+                            <a href="/">Cancel</a>
+                        </form>
+                    {% else %}
+                        {% if user_info and tweet.user_id == user_info.user_id %}
+                            <a href="/?edit_id={{tweet._id}}">Edit</a>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                {%endfor%} 
         </div>   
         {%endif%}   
     </body>
