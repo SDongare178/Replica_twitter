@@ -55,17 +55,43 @@
     <b>{{ tweet.username }}</b><br>
 
     {% if edit_id == tweet._id|string %}
-        <form method="post" action="/edit-tweet/{{tweet._id}}">
-            <textarea type="text" name="tweet_text" value="{{tweet.content}}" maxlength="280">
+        <form method="post" action="/edit-tweet/{{tweet._id}}" enctype="multipart/form-data">
+            <input type="hidden" name="source" value="profile">
+            <input type="hidden" name="username" value="profile">
+            <textarea name="tweet_text" maxlength="280">{{tweet.content}}</textarea>
+            <input type="file" name="file">
+            {% if tweet.image_url %}
+            <label>
+                <input type="checkbox" name="remove_image"> Remove Image
+            </label>
+            {% endif %}
+
             <button type="submit">Save</button>
             <a href="/profile/{{profile_user.username}}">Cancel</a>
         </form>
+        
     {% else %}
 
+        {% if tweet.retweet %}
+            <small>🔁 Retweeted from 
+                <a href="/profile/{{tweet.original_username}}">
+                    {{tweet.original_username}}
+                </a>
+            </small><br>
+        {% endif %}
         {{tweet.content}}<br>
+        {% if tweet.image_url %}
+            <img src="{{tweet.image_url}}" width="200"><br>
+        {% endif %}
 
         {% if is_owner %}
             <a href="/profile/{{profile_user.username}}?edit_id={{tweet._id}}">Edit</a>
+            <form method="post" action="/delete-tweet/{{tweet._id}}">
+                <input type="hidden" name="source" value="profile">
+                <input type="hidden" name="username" value="{{profile_user.username}}">
+                <button type="submit">Delete</button>
+            </form>
+
         {% endif %}
     {% endif %}
 

@@ -44,17 +44,16 @@ azure_connection_string = (
     "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;"
     "BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
 )
+
+#azurite container for profile picture
 azure_service_client = BlobServiceClient.from_connection_string(azure_connection_string)
 azure_container_name = "profile-pictures-container"
-
-
 
 azure_container_client = azure_service_client.get_container_client(azure_container_name)
 try:
     azure_container_client.create_container()
 except Exception:
-    print('container exists')
-
+    print('profile picture container exists')
 
 container_service_client=azure_service_client.get_container_client(azure_container_name)
 existing_policies = container_service_client.get_container_access_policy()
@@ -62,6 +61,23 @@ access_policy = AccessPolicy(permission=ContainerSasPermissions(read=True),expir
 identifiers = {'read': access_policy}
 
 azure_container_client.set_container_access_policy(signed_identifiers=identifiers,public_access=PublicAccess.CONTAINER)
+
+#container for tweet images
+tweet_images_container_name = "tweet-images-container"
+tweet_images_container_client = azure_service_client.get_container_client(
+    tweet_images_container_name
+)
+try:
+    tweet_images_container_client.create_container()
+except Exception:
+    print('tweet images container exists')
+
+container_service_client2 = azure_service_client.get_container_client(tweet_images_container_name)
+existing_policies = container_service_client.get_container_access_policy()
+access_policy = AccessPolicy(permission=ContainerSasPermissions(read=True),expiry=datetime.now() + timedelta(hours=24),start=datetime.now() - timedelta(minutes=5))
+identifiers2 = {'read': access_policy}
+
+container_service_client2.set_container_access_policy(signed_identifiers=identifiers2,public_access=PublicAccess.CONTAINER)
 
 
 
@@ -179,10 +195,20 @@ async def newUsername(request: Request):
         return RedirectResponse("/", status_code=302)
     
     form = await request.form()
-    username = form["username"]
+    username = form["username"].strip()
 
     #check for username already there
     existing_user = users_collection.find_one({"username": username})
+
+    if not username:
+        return templates.TemplateResponse("main.html", {
+            "request": request,
+            "user_token": user_token,
+            "user_info": None,
+            'need_username': True,
+            "error_message": "Username cannot be empty.",
+            "tweets": []
+        })
 
     if existing_user:
         return templates.TemplateResponse("main.html",{
@@ -218,8 +244,24 @@ async def addTweet(request: Request):
     
     form = await request.form()
     tweet_text = form['tweet_text']
-
     user_info = getUser(user_token)
+    
+    if not tweet_text:
+        following_ids = user_info.get("following", []).copy()
+        following_ids.append(user_token["user_id"])
+        tweets = list(tweets_collection.find(
+            {"user_id": {"$in": following_ids}}
+        ).sort("created_at", -1).limit(20))
+
+        return templates.TemplateResponse("main.html", {
+            "request": request,
+            "user_token": user_token,
+            "user_info": user_info,
+            "need_username": False,
+            "tweets": tweets,
+            "edit_id": None,
+            "error_message": "Tweet cannot be empty."
+            })
 
     if len(tweet_text) >280:
         following_ids = user_info.get("following", []).copy()
@@ -239,13 +281,27 @@ async def addTweet(request: Request):
             "error_message": "Tweet must be 280 characters or less."
         })
     
+    file = form.get("file")
+    image_url = ""
+
+    if file and file.filename:
+        if file.content_type not in ["image/jpeg", "image/png"]:
+            return RedirectResponse("/", status_code=302)
+
+        filename = user_token["user_id"] + "_" + file.filename
+        blob_client = tweet_images_container_client.get_blob_client(filename)
+
+        blob_client.upload_blob(await file.read(), overwrite=True)
+        image_url = blob_client.url
     
 
     tweets_collection.insert_one({
         "user_id" : user_token["user_id"],
         "username": user_info["username"],
         "content": tweet_text,
-        "created_at": datetime.now()
+        "image_url": image_url,
+        "created_at": datetime.now(),
+        "retweet": False
     })
         
     
@@ -325,7 +381,7 @@ async def profile(request: Request, username: str, edit_id: str = None):
         return RedirectResponse("/", status_code=status.HTTP_302_FOUND)     
     
     tweets = list(
-        tweets_collection.find({"username": username})
+        tweets_collection.find({"user_id": user["user_id"]})
         .sort("created_at", -1)
         .limit(10)
     )
@@ -457,6 +513,25 @@ async def editTweet(request: Request, tweet_id: str):
                 f"/profile/{username}?edit_id={tweet_id}", status_code=302)
         return RedirectResponse(f"/?edit_id={tweet_id}", status_code=302)
 
+    update_data = {"content": new_text}
+
+    if form.get("remove_image"):
+        update_data["image_url"] = ""
+
+    
+    file = form.get("file")
+
+
+    if file and file.filename:
+        if file.content_type not in ["image/jpeg", "image/png"]:
+            return RedirectResponse("/", status_code=302)
+
+        filename = user_token["user_id"] + "_" + file.filename
+        blob_client = tweet_images_container_client.get_blob_client(filename)
+
+        blob_client.upload_blob(await file.read(), overwrite=True)
+        update_data["image_url"] = blob_client.url
+
 
     tweets_collection.update_one(
         {
@@ -464,9 +539,10 @@ async def editTweet(request: Request, tweet_id: str):
             "user_id": user_token["user_id"]
         },
         {
-            "$set": {"content": new_text}
+            "$set": update_data
         }
     )
+
 
     if source == 'profile' and username:
         return RedirectResponse(f"/profile/{username}", status_code=302)
@@ -483,7 +559,7 @@ async def updateBio(request: Request):
 
 
     form = await request.form()
-    bio = form["bio"]
+    bio = form["bio"].strip()
 
     user = users_collection.find_one({"user_id": user_token["user_id"]})
 
@@ -497,5 +573,64 @@ async def updateBio(request: Request):
 
     return RedirectResponse(f"/profile/{user['username']}", status_code=302)
 
+@app.post('/delete-tweet/{tweet_id}')
+async def deleteTweet(request: Request, tweet_id: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=302)
+
+    form = await request.form()
+    source   = form.get('source', 'home')
+    username = form.get('username', '')
+
+    
+    tweets_collection.delete_one({
+        "_id": ObjectId(tweet_id),
+        "user_id": user_token["user_id"]  
+    })
+
+    if source == 'profile' and username:
+        return RedirectResponse(f"/profile/{username}", status_code=302)
+    return RedirectResponse("/", status_code=302)
 
 
+@app.post('/retweet/{tweet_id}')
+async def retweet(request: Request, tweet_id: str):
+    id_token = request.cookies.get('token')
+    user_token = validateFirebaseToken(id_token)
+
+    if not user_token:
+        return RedirectResponse('/', status_code=302)
+
+    original = tweets_collection.find_one({"_id": ObjectId(tweet_id)})
+
+    if not original:
+        return RedirectResponse("/", status_code=302)
+
+    if original.get("retweet"):
+        return RedirectResponse("/", status_code=302)
+    
+    existing = tweets_collection.find_one({
+    "user_id": user_token["user_id"],
+    "original_tweet_id": ObjectId(tweet_id)
+    })
+
+    if existing:
+        return RedirectResponse("/", status_code=302)
+
+    user = getUser(user_token)
+
+    tweets_collection.insert_one({
+        "user_id": user_token["user_id"],
+        "username": user["username"],
+        "content": original["content"],
+        "image_url": original.get("image_url", ""),
+        "created_at": datetime.now(),
+        "retweet": True,
+        "original_tweet_id": original["_id"],
+        "original_username": original["username"]
+    })
+
+    return RedirectResponse("/", status_code=302)
