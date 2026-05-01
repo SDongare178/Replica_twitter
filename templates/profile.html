@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <title>CPA Opinionater</title>
+    <link type ='text/css' href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet"/>
     <script type="module" src="{{ url_for('static', path='/firebase-login.js')}}"></script>
 </head>
 <body>
@@ -10,94 +12,142 @@
         <button id="login">Login</button>
         <button id="sign-up">Sign Up</button>
     </div>
-    <button id="sign-out" hidden="true">Sign Out</button>
+    
 
-<h2>{{profile_user.username}}</h2>
+    <header class="app-header">
+        <span class="logo">◈ Repwitter</span>
+        <div class="nav-links">
+            <a href="/">Timeline</a>
+            <a href="/search-users">Search Users</a>
+            <a href="/search-tweets">Search Tweets</a>
+            <button id="sign-out" hidden="true">Sign Out</button>
+        </div>
+    </header>
 
-<p>{{profile_user.bio}}</p>
 
-    {% if profile_user.profile_picture %}
-        <img src="{{ profile_user.profile_picture }}" width="150">
-    {% else %}
-        <img src="/static/default.png" width="150">      
-    {% endif %}
-        {% if is_owner %}
-        <h3>Edit Bio</h3>
-        <form method="post" action="/update-bio">
-            <textarea name="bio" maxlength="280">{{profile_user.bio}}</textarea>
-            <button type="submit">Save Bio</button>
-        </form>
+    <div class="main-container">
 
-        <h3>Upload Profile Picture</h3>
-        <form method="post" action="/upload-profile-picture" enctype="multipart/form-data">
-            <input type="file" name="file">
-            <button type="submit">Upload</button>
-        </form>
-        {% endif %}
-        <p>Following: {{ profile_user.following|length }}</p>
-        <p>Followers: {{ profile_user.followers|length }}</p>
-    {% if not is_owner %}    
-        {% if is_following %}
-            <form method="post" action="/unfollow-user/{{profile_user.username}}">
-                <button type="submit">Unfollow</button>
-            </form>
-        {% else %}
-            <form method="post" action="/follow-user/{{profile_user.username}}">
-                <button type="submit">Follow</button>
-            </form>
-        {% endif %}
-    {% endif %}        
-
-<h3>Last 10 Tweets</h3>
-
-{% for tweet in tweets %}
-<div>
-    <b>{{ tweet.username }}</b><br>
-
-    {% if edit_id == tweet._id|string %}
-        <form method="post" action="/edit-tweet/{{tweet._id}}" enctype="multipart/form-data">
-            <input type="hidden" name="source" value="profile">
-            <input type="hidden" name="username" value="profile">
-            <textarea name="tweet_text" maxlength="280">{{tweet.content}}</textarea>
-            <input type="file" name="file">
-            {% if tweet.image_url %}
-            <label>
-                <input type="checkbox" name="remove_image"> Remove Image
-            </label>
+    
+        <div class="profile-header"></div>
+            {% if profile_user.profile_picture %}
+            <img src="{{ profile_user.profile_picture }}" class="profile-avatar" alt="avatar">
+            {% else %}
+            <img src="/static/default.png" class="profile-avatar" alt="avatar">      
             {% endif %}
 
-            <button type="submit">Save</button>
-            <a href="/profile/{{profile_user.username}}">Cancel</a>
-        </form>
+            <div class="profile-info">
+                <div class="profile-username">@{{profile_user.username}}</div>
+                <div class="profile-bio">
+                    {{profile_user.bio if profile_user.bio else "No bio yet."}}
+                </div>
+
+                <div class="profile-stats">
+                    <div><span>{{ profile_user.following|length }}</span> Following</div>
+                    <div><span>{{ profile_user.followers|length }}</span> Followers</div>
+                </div>
+                <div class="tweet-actions" style="margin-top:0.75rem">
+                    {% if not is_owner %}
+                        {% if is_following %}
+                        <form method="post" action="/unfollow-user/{{profile_user.username}}" style="margin:0">
+                            <button type="submit" class="btn btn-secondary">Unfollow</button>
+                        </form>
+                        {% else %}
+                        <form method="post" action="/follow-user/{{profile_user.username}}" style="margin:0">
+                            <button type="submit" class="btn btn-secondary">Follow</button>
+                        </form>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+
+        {%if is_owner %}
+        <div class="card">
+            <div class="card-title">Edit Profile</div>
+            
+            <p class="text-muted" style="margin-bottom:0.5rem">Bio</p>
+            <form method="post" action="/update-bio" style="margin-bottom:1rem">
+                <textarea name="bio" maxlength="280" style="margin-bottom:0.5rem">{{profile_user.bio}}</textarea>
+                <button type="submit" class="btn btn-primary">Save Bio</button>
+            </form>
+            
+            <p class="text-muted" style="margin-bottom:0.5rem">Profile Picture</p>
+            <form method="post" action="/upload-profile-picture"
+                enctype="multipart/form-data"
+                style="display:flex;gap:0.5rem;align-items:center">
+                <input type="file" name="file" accept="image/jpeg,image/png"/>
+                <button type="submit" class="btn btn-secondary">Upload</button>
+            </form>
         
-    {% else %}
-
-        {% if tweet.retweet %}
-            <small>🔁 Retweeted from 
-                <a href="/profile/{{tweet.original_username}}">
-                    {{tweet.original_username}}
-                </a>
-            </small><br>
+        </div>   
         {% endif %}
-        {{tweet.content}}<br>
-        {% if tweet.image_url %}
-            <img src="{{tweet.image_url}}" width="200"><br>
-        {% endif %}
+                
+        <div class="card-title" style="padding:0 0 0.5rem 0; border-bottom:1px solid var(--border); margin-bottom:1rem;">
+            Last 10 Tweets
+        </div>
 
-        {% if is_owner %}
-            <a href="/profile/{{profile_user.username}}?edit_id={{tweet._id}}">Edit</a>
-            <form method="post" action="/delete-tweet/{{tweet._id}}">
+        {% for tweet in tweets %}
+        <div class="tweet-card">
+            <div class="tweet-header">
+                {% if tweet.profile_picture %}
+                <img src="{{tweet.profile_picture}}" class="tweet-avatar" alt="avatar">
+                {% else %}
+                <img src="/static/default.png" class="tweet-avatar" alt="avatar">
+                {% endif %}
+                <span class="tweet-username">@{{ tweet.username }}</span>
+                <span class="tweet-time">{{tweet.created_at}}</span>
+            </div>
+            {% if edit_id == tweet._id|string %}
+            <form method="post" action="/edit-tweet/{{tweet._id}}"
+                enctype="multipart/form-data">
                 <input type="hidden" name="source" value="profile">
                 <input type="hidden" name="username" value="{{profile_user.username}}">
-                <button type="submit">Delete</button>
+                <textarea name="tweet_text" maxlength="280"
+                        style="margin-bottom:0.5rem">{{tweet.content}}</textarea>
+                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                    <input type="file" name="file" accept="image/jpeg,image/png"/>
+                    {% if tweet.image_url %}
+                    <label style="color:var(--text-muted);font-size:0.8rem">
+                        <input type="checkbox" name="remove_image"> Remove image
+                    </label>
+                    {% endif %}
+                    <button type="submit" class="btn btn-primary">Save</button>
+                    <a href="/profile/{{profile_user.username}}"
+                    class="btn btn-ghost">Cancel</a>
+                </div>
             </form>
+            {% else %}
 
-        {% endif %}
-    {% endif %}
+            {% if tweet.retweet %}
+                <div class="retweet-label">
+                    🔁 Retweeted from
+                    <a href="/profile/{{tweet.original_username}}">
+                        @{{tweet.original_username}}
+                    </a>
+                </div>
+            {% endif %}
 
-    <small>{{tweet.created_at}}</small>
+            <p class="tweet-content">{{tweet.content}}</p>
+
+            {% if is_owner %}
+            <div class="tweet-actions">
+                <a href="/profile/{{profile_user.username}}?edit_id={{tweet._id}}"
+                class="btn btn-ghost">Edit</a>
+                <form method="post" action="/delete-tweet/{{tweet._id}}" style="margin:0">
+                    <input type="hidden" name="source" value="profile">
+                    <input type="hidden" name="username" value="{{profile_user.username}}">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+            {% endif %}
+            {% endif %}
+
+            <div style="margin-top:0.5rem">
+                <span class="tweet-time">{{tweet.created_at}}</span>
+            </div>            
+        </div>
+        {% endfor %}
 </div>
-{% endfor %}
-
 </body>
 </html>

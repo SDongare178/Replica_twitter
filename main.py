@@ -231,7 +231,6 @@ async def newUsername(request: Request):
     })
 
     return RedirectResponse("/", status_code=status.HTTP_302_FOUND)
-    
 
 #method to add a new room to the database
 @app.post('/add-tweet', response_class=HTMLResponse)
@@ -245,6 +244,7 @@ async def addTweet(request: Request):
     form = await request.form()
     tweet_text = form['tweet_text']
     user_info = getUser(user_token)
+    profile_picture =  user_info.get("profile_picture", "")
     
     if not tweet_text:
         following_ids = user_info.get("following", []).copy()
@@ -298,6 +298,7 @@ async def addTweet(request: Request):
     tweets_collection.insert_one({
         "user_id" : user_token["user_id"],
         "username": user_info["username"],
+        "profile_picture": profile_picture,
         "content": tweet_text,
         "image_url": image_url,
         "created_at": datetime.now(),
@@ -351,8 +352,6 @@ async def searchTweets(request: Request, query: str =""):
             "content": {"$regex": "^" + query}
         }))
      
-    
-
     return templates.TemplateResponse("search.html", {
         "request": request,
         "user_token": user_token, 
@@ -488,8 +487,6 @@ async def uploadProfilePicture(request: Request):
             {"$set": {"profile_picture": file_url}}
     )
 
-    
-       
     return RedirectResponse(f"/profile/{user['username']}", status_code=status.HTTP_302_FOUND)
 
 
@@ -621,10 +618,12 @@ async def retweet(request: Request, tweet_id: str):
         return RedirectResponse("/", status_code=302)
 
     user = getUser(user_token)
+    profile_picture = user.get("profile_picture", ""),
 
     tweets_collection.insert_one({
         "user_id": user_token["user_id"],
         "username": user["username"],
+        "profile_picture": profile_picture,
         "content": original["content"],
         "image_url": original.get("image_url", ""),
         "created_at": datetime.now(),
