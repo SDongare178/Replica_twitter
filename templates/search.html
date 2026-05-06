@@ -1,44 +1,86 @@
+<!DOCTYPE html>
+<html>
 <head>
-    <title>CPA Opinionater - Search</title>
+    <title>Search Repwitter</title>
     <link type='text/css' href="{{ url_for('static', path='/styles.css') }}" rel="stylesheet"/>
     <script type="module" src="{{ url_for('static', path='/firebase-login.js')}}"></script>
 </head>
 <body>
-    <div id="login-box" hidden="true">
-        <input type="email" id="email"/>
-        <input type="password" id="password"/>
-        <button id="login">Login</button>
-        <button id="sign-up">Sign Up</button>
+
+<div id="login-box" hidden="true">
+    <input type="email" id="email"/>
+    <input type="password" id="password"/>
+    <button id="login">Login</button>
+    <button id="sign-up">Sign Up</button>
+</div>
+<button id="sign-out" hidden="true">Sign out</button>
+
+    <header class="app-header">
+        <a href="/" class="logo">Repwitter</a>
+        <div class="nav-links">
+            <a href="/">Timeline</a>    
+        </div>
+    </header>
+
+<div class="main-container">
+
+   
+    <div class="search-tabs">
+        <a href="/search-users" class="{% if type == 'users' %}active{% endif %}">
+            Users
+        </a>
+        <a href="/search-tweets" class="{% if type == 'tweets' %}active{% endif %}">
+            Tweets
+        </a>
     </div>
-    <button id="sign-out" hidden="true">Sign Out</button>
 
+    <div class="search-bar">
+        <form method="get" action="{% if type == 'users' %}/search-users{% else %}/search-tweets{% endif %}" >
+            <input type="text" name="query" value="{{query}}" placeholder="Search {{type}}..."/>
+            <button type="submit" class="btn btn-primary">Search</button>
+        </form>
+    </div>
 
-<h2>Search</h2>
-<a href="/">Back to Timeline</a>
-
-<form method="get" action="{% if type == 'users' %}/search-users{% else %}/search-tweets{% endif %}">
-    <input type="text" name="query" value="{{query}}">
-    <button type="submit">Search</button>
-</form>
-
-<hr>
-
-{% if type == "users" %}
-    <h3>User Results</h3>
+    
+    {% if type == "users" %}
     {% for user in users %}
-        <div>
-            <a href="/profile/{{user.username}}">{{user.username}}</a>
-        </div>
-    {% endfor %}
-{% endif %}
 
-{% if type == "tweets" %}
-    <h3>Tweet Results</h3>
-    {% for tweet in tweets %}
-        <div>
-            <b>{{tweet.username}}</b><br>
-            {{tweet.content}}
-        </div>
+    <div class="user-card">
+        {% if user.profile_picture %}
+            <img src="{{user.profile_picture}}" class="tweet-avatar" alt="avatar">
+        {% else %}
+            <img src="/static/default.png" class="tweet-avatar" alt="avatar">
+        {% endif %}
+        <div class="user-card-info">
+            <a href="/profile/{{user.username}}" class="tweet-username">
+                @{{user.username}}
+            </a>
+            {% if user.bio %}
+                <p>{{user.bio}}</p>
+            {% endif %}      
+        </div>    
+    </div>
+        
     {% endfor %}
-{% endif %}
+    {% endif %}
+
+    {% if type == "tweets" %}
+    {% for tweet in tweets %}
+    <div class="tweet-card">
+        <div class="tweet-header">
+            <a href="/profile/{{tweet.username}}" class="tweet-username">
+                @{{tweet.username}}
+            </a>
+            <span class="tweet-time">{{tweet.created_at}}</span>
+        </div>
+        <p class="tweet-content">{{tweet.content}}</p>
+        {% if tweet.image_url %}
+        <img src="{{tweet.image_url}}" class="tweet-image" alt="tweet image">
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+</div>
 </body>
+</html>

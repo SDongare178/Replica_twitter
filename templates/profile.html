@@ -12,29 +12,28 @@
         <button id="login">Login</button>
         <button id="sign-up">Sign Up</button>
     </div>
-    
+    <button id="sign-out" hidden="true">Sign Out</button>
 
     <header class="app-header">
-        <span class="logo">◈ Repwitter</span>
+        <a href="/" class="logo">Repwitter</a>
         <div class="nav-links">
             <a href="/">Timeline</a>
             <a href="/search-users">Search Users</a>
             <a href="/search-tweets">Search Tweets</a>
-            <button id="sign-out" hidden="true">Sign Out</button>
+            
         </div>
     </header>
 
 
     <div class="main-container">
-
     
-        <div class="profile-header"></div>
+        <div class="profile-header">
             {% if profile_user.profile_picture %}
             <img src="{{ profile_user.profile_picture }}" class="profile-avatar" alt="avatar">
             {% else %}
             <img src="/static/default.png" class="profile-avatar" alt="avatar">      
             {% endif %}
-
+            
             <div class="profile-info">
                 <div class="profile-username">@{{profile_user.username}}</div>
                 <div class="profile-bio">
@@ -45,14 +44,14 @@
                     <div><span>{{ profile_user.following|length }}</span> Following</div>
                     <div><span>{{ profile_user.followers|length }}</span> Followers</div>
                 </div>
-                <div class="tweet-actions" style="margin-top:0.75rem">
+                <div class="profile-follow-actions">
                     {% if not is_owner %}
                         {% if is_following %}
-                        <form method="post" action="/unfollow-user/{{profile_user.username}}" style="margin:0">
-                            <button type="submit" class="btn btn-secondary">Unfollow</button>
-                        </form>
+                            <form method="post" action="/unfollow-user/{{profile_user.username}}">
+                                <button type="submit" class="btn btn-secondary">Unfollow</button>
+                            </form>
                         {% else %}
-                        <form method="post" action="/follow-user/{{profile_user.username}}" style="margin:0">
+                        <form method="post" action="/follow-user/{{profile_user.username}}">
                             <button type="submit" class="btn btn-secondary">Follow</button>
                         </form>
                         {% endif %}
@@ -63,27 +62,23 @@
 
 
         {%if is_owner %}
-        <div class="card">
-            <div class="card-title">Edit Profile</div>
-            
-            <p class="text-muted" style="margin-bottom:0.5rem">Bio</p>
-            <form method="post" action="/update-bio" style="margin-bottom:1rem">
-                <textarea name="bio" maxlength="280" style="margin-bottom:0.5rem">{{profile_user.bio}}</textarea>
+        <div class="edit-card">
+            <h3>Edit Profile</h3>
+            <p class="field-label">Bio</p>
+            <form method="post" action="/update-bio">
+                <textarea name="bio" maxlength="280">{{profile_user.bio}}</textarea>
                 <button type="submit" class="btn btn-primary">Save Bio</button>
             </form>
             
-            <p class="text-muted" style="margin-bottom:0.5rem">Profile Picture</p>
-            <form method="post" action="/upload-profile-picture"
-                enctype="multipart/form-data"
-                style="display:flex;gap:0.5rem;align-items:center">
+            <p class="field-label">Profile Picture</p>
+            <form method="post" action="/upload-profile-picture" enctype="multipart/form-data" class="upload-form">
                 <input type="file" name="file" accept="image/jpeg,image/png"/>
                 <button type="submit" class="btn btn-secondary">Upload</button>
             </form>
-        
         </div>   
         {% endif %}
                 
-        <div class="card-title" style="padding:0 0 0.5rem 0; border-bottom:1px solid var(--border); margin-bottom:1rem;">
+        <div class="section-title">
             Last 10 Tweets
         </div>
 
@@ -103,12 +98,11 @@
                 enctype="multipart/form-data">
                 <input type="hidden" name="source" value="profile">
                 <input type="hidden" name="username" value="{{profile_user.username}}">
-                <textarea name="tweet_text" maxlength="280"
-                        style="margin-bottom:0.5rem">{{tweet.content}}</textarea>
-                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+                <textarea name="tweet_text" maxlength="280">{{tweet.content}}</textarea>
+                <div class="edit-form-actions">
                     <input type="file" name="file" accept="image/jpeg,image/png"/>
                     {% if tweet.image_url %}
-                    <label style="color:var(--text-muted);font-size:0.8rem">
+                    <label class="remove-image-label">
                         <input type="checkbox" name="remove_image"> Remove image
                     </label>
                     {% endif %}
@@ -129,12 +123,15 @@
             {% endif %}
 
             <p class="tweet-content">{{tweet.content}}</p>
+            {% if tweet.image_url %}
+                <img src="{{tweet.image_url}}" class="tweet-image" alt="tweet image">
+            {% endif %}
+
 
             {% if is_owner %}
             <div class="tweet-actions">
-                <a href="/profile/{{profile_user.username}}?edit_id={{tweet._id}}"
-                class="btn btn-ghost">Edit</a>
-                <form method="post" action="/delete-tweet/{{tweet._id}}" style="margin:0">
+                <a href="/profile/{{profile_user.username}}?edit_id={{tweet._id}}" class="cancel-btn">Edit</a>
+                <form method="post" action="/delete-tweet/{{tweet._id}}">
                     <input type="hidden" name="source" value="profile">
                     <input type="hidden" name="username" value="{{profile_user.username}}">
                     <button type="submit" class="btn btn-danger">Delete</button>
@@ -142,10 +139,7 @@
             </div>
             {% endif %}
             {% endif %}
-
-            <div style="margin-top:0.5rem">
-                <span class="tweet-time">{{tweet.created_at}}</span>
-            </div>            
+              
         </div>
         {% endfor %}
 </div>

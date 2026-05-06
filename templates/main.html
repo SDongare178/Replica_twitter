@@ -14,8 +14,8 @@
             <label>Password:</label>
             <input type="password" name="password" id="password"/>
             <div>
-            <button id="login">Login</button>
-            <button id="sign-up">Sign Up</button>
+            <button id="login"class="btn btn-primary">Login</button>
+            <button id="sign-up"class="btn btn-primary">Sign Up</button>
             </div>
         </div>
         <button id="sign-out" hidden="true">Sign Out</button>
@@ -24,43 +24,49 @@
          -token object that was passed in , we will aslso show the user the documner that has a name and age-->
         {% if user_token %}
         <header class="app-header">
-            <span class="logo">◈ Repwitter</span>
+            <a href="/" class="logo">Repwitter</a>
             <div class="nav-links">
                 {% if user_info %}
-                <a href="/profile/{{user_info.username}}">@{{user_info.username}}</a>
+                <a href="/profile/{{user_info.username}}" class="nav-profile-link">
+                    {% if user_info.profile_picture %}
+                        <img src="{{user_info.profile_picture}}" class="tweet-avatar" alt="avatar">
+                    {% else %}
+                        <img src="/static/default.png" class="tweet-avatar" alt="avatar">
+                    {% endif %}
+                    @{{user_info.username}}
+                </a>                
                 <a href="/search-users">Search Users</a>
                 <a href="/search-tweets">Search Tweets</a>
                 {% endif %}
-                <button id="sign-out">Sign out</button>
+                
             </div>
         </header>
         <div class="main-container">
 
         <div>
         {% if error_message and not need_username %}
-            <p style="color:red">{{ error_message }}</p>
+            <div class="error-msg">{{ error_message }}</div>
         {% endif %}
 
             <!-- set username-->
             {% if need_username %}
             <div class="setup-card">
-                <h2>Welcome 👋</h2>
+                <h2>Welcome!! </h2>
                 <h2>Set Username</h2>
                 {% if error_message %}
-                    <p style="color:red">{{ error_message }}</p>
+                    <div class="error-msg">{{ error_message }}</div>
                 {% endif %}
                 <form method="post" action="/new-username">
                     <input type="text" name="username" required>
-                    <button type="submit">Save</button>   
+                    <button type="submit" class="btn btn-primary">Save</button>   
                 </form>
             </div>    
             {% endif %}
 
-            <!--Main page-->
+    
             {% if user_info %}
                 <h2>Welcome!! {{ user_info.username}}</h2>
 
-                <a href="/profile/{{user_info.username}}">My Profile</a>
             {% endif %}
             
             
@@ -69,13 +75,13 @@
                     <textarea name="tweet_text" maxlength="280" required placeholder="Any New thoughts?"></textarea>
                     <div class="compose-footer">
                         <input type="file" name="file" accept="image/jpeg,image/png"/>    
-                        <button type="submit">Tweet</button>
+                        <button type="submit" class="btn btn-primary">Tweet</button>
                     </div>
                 </form> 
             </div>    
         
-            
-            <div class="card-title" style="padding:0 0 0.5rem 0; border-bottom:1px solid var(--border); margin-bottom:1rem;">
+            <!-- timeline-->
+            <div class="section-title">
                 Timeline
             </div>
                 {% for tweet in tweets %}
@@ -92,12 +98,8 @@
                         <span class="tweet-time">{{tweet.created_at}}</span>
                     </div>
                       
-                        {% if tweet.image_url %}
-                            <img src="{{tweet.image_url}}" width="200">
-                            
-                        {% endif %}
                         {% if tweet.retweet %}
-                        <div class="retweet-label">>  
+                        <div class="retweet-label">  
                             🔁Retweeted from <a href="/profile/{{tweet.original_username}}">@{{tweet.original_username}}</a>
                         </div>    
                         {% endif %}
@@ -106,17 +108,17 @@
                         {% if edit_id == tweet._id|string %}
 
                             <form method="post" action="/edit-tweet/{{tweet._id}}" enctype="multipart/form-data">
-                                <textarea name="tweet_text" maxlength="280" required style="margin-bottom:0.5rem">{{tweet.content}}</textarea>
-                                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap"></div>
+                                <textarea name="tweet_text" maxlength="280" required>{{tweet.content}}</textarea>
+                                <div class="edit-form-actions">
                                 <input type="file" name="file" accept="image/jpeg,image/png"/> 
                                 {% if tweet.image_url %}
-                                    <label style="color:var(--text-muted);font-size:0.8rem">
+                                    <label class="remove-image-label">
                                         <input type="checkbox" name="remove_image"> Remove image
                                     </label>
                                 {% endif %}
                                   
                                 <button type="submit"class="btn btn-primary">Save</button>
-                                <a href="/" class="btn btn-ghost">Cancel</a>
+                                <a href="/" class="cancel-btn">Cancel</a>
                                 </div>
 
                             </form>
@@ -128,24 +130,23 @@
                         {% endif %}
                         <div class="tweet-actions">
                             {% if user_info and tweet.user_id != user_info.user_id and not tweet.retweet %}
-                            <form method="post" action="/retweet/{{tweet._id}}" style="margin:0">
+                            <form method="post" action="/retweet/{{tweet._id}}">
                                 <button type="submit" class="btn btn-ghost">🔁 Retweet</button>
                             </form>
                             {% endif %}
                             
                             {% if user_info and tweet.user_id == user_info.user_id and edit_id != tweet._id|string %}
                             <a href="/?edit_id={{tweet._id}}" class="btn btn-ghost">Edit</a>
-                            <form method="post" action="/delete-tweet/{{tweet._id}}" style="margin:0">
+                            <form method="post" action="/delete-tweet/{{tweet._id}}">
                                 <input type="hidden" name="source" value="home">
                                 <button type="submit" class="btn btn-danger">Delete</button>
                             </form>
                             {% endif %}
                         </div>           
-                    </div>
+                    
                 </div>
                 {%endfor%} 
         </div>   
-        {%endif%} 
-        </div>  
+        {%endif%}  
     </body>
 </html>
