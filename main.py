@@ -14,7 +14,7 @@ from azure.storage.blob import BlobServiceClient, AccessPolicy, ContainerSasPerm
 
 
 #connection string to out MongoDB Nosql database
-uri = "mongodb+srv://sudhanshdongare178_db_user:pjZRFup5KsigUq6@cluster0.7ubbhoc.mongodb.net/?appName=Cluster0"
+uri = ""#your mongodb
 
 #create a new client and connect to the server
 client = MongoClient(uri, server_api=ServerApi('1'))
